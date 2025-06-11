@@ -97,8 +97,8 @@ if ( !is_admin() )
 	elseif ( $kpg_config['picEngine'] == 'fancybox' )
 	{
 		$fancybox_version = '1.2.6';
-		wp_enqueue_script('fancybox', plugins_url('fancybox/jquery.fancybox.js', __FILE__), array('jquery', 'swfobject'), $fancybox_version);
-		wp_enqueue_style('fancybox', plugins_url('fancybox/jquery.fancybox.css', __FILE__), false, $fancybox_version, 'screen');
+		// wp_enqueue_script('fancybox', plugins_url('fancybox/jquery.fancybox.js', __FILE__), array('jquery', 'swfobject'), $fancybox_version);
+		// wp_enqueue_style('fancybox', plugins_url('fancybox/jquery.fancybox.css', __FILE__), false, $fancybox_version, 'screen');
 	}
 }
 else
@@ -132,11 +132,11 @@ function kpicasa_gallery_init()
 	{
 		$picEngineDir = plugins_url('fancybox', __FILE__);
 
-		print "<script type='text/javascript'>\n";
-		print "	jQuery(document).ready(function() {\n";
-		print "		jQuery('a.fancybox-kpicasa_gallery').fancybox({ 'hideOnContentClick': false });\n";
-		print "	});\n";
-		print "</script>\n";
+		// print "<script type='text/javascript'>\n";
+		// print "	jQuery(document).ready(function() {\n";
+		// print "		jQuery('a.fancybox-kpicasa_gallery').fancybox({ 'hideOnContentClick': false });\n";
+		// print "	});\n";
+		// print "</script>\n";
 	}
 }
 

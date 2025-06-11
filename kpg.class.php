@@ -63,8 +63,20 @@ if ( !class_exists('KPicasaGallery') )
 			$data = wp_cache_get('kPicasaGallery', 'kPicasaGallery');
 			if ( false === $data )
 			{
-				$url  = 'http://picasaweb.google.com/data/feed/api/user/'.urlencode($this->username).'?kind=album';
-				$data = wp_remote_get( $url, array('kind' => 'album') );
+				$url  = 'http://kedapi.ddns.net:2283/api/albums'; // Immich URL
+				$data = wp_remote_get( 
+					$url, array(
+						'headers' => array('x-api-key' => 'IMMICH_API_KEY') // Immich API key
+					)
+				);
+				$dt = json_decode($data['body']);
+
+				function cmp($a, $b) {
+				    return strcmp($b->startDate, $a->startDate);
+				}
+
+				usort($dt, "cmp");
+
 				if ( is_wp_error($data) )
 				{
 					return $data;
@@ -74,11 +86,11 @@ if ( !class_exists('KPicasaGallery') )
 				$data = str_replace('media:', 'media_', $data);
 				wp_cache_set('kPicasaGallery', $data, 'kPicasaGallery', $this->cacheTimeout);
 			}
-			$xml = @simplexml_load_string($data);
-			if ( $xml === false )
-			{
-				return new WP_Error( 'kpicasa_gallery-invalid-response', '<strong>'.__('Error', 'kpicasa_gallery').':</strong> '.__('the communication with Picasa Web Albums didn\'t go as expected. Here\'s what Picasa Web Albums said', 'kpicasa_gallery').':<br /><br />'.$data );
-			}
+			// $xml = @simplexml_load_string($data);
+			// if ( $xml === false )
+			// {
+			// 	return new WP_Error( 'kpicasa_gallery-invalid-response', '<strong>'.__('Error', 'kpicasa_gallery').':</strong> '.__('the communication with Picasa Web Albums didn\'t go as expected. Here\'s what Picasa Web Albums said', 'kpicasa_gallery').':<br /><br />'.$data );
+			// }
 
 			//----------------------------------------
 			// Prepare some variables
@@ -99,7 +111,7 @@ if ( !class_exists('KPicasaGallery') )
 			else
 			{
 				$start = 0;
-				$stop  = count( $xml->entry ) - 1;
+				$stop  = count( $dt ) - 1;
 			}
 
 			// Set the class, depending on how many albums per row
@@ -111,13 +123,14 @@ if ( !class_exists('KPicasaGallery') )
 			print '<table cellpadding="0" cellspacing="0" border="0" width="100%" id="kpg-albums">';
 
 			$i = -1; $j = -1;
-			foreach( $xml->entry as $album )
+
+			foreach( $dt as $album )
 			{
-				if ( count($this->showOnlyAlbums) && !in_array((string) $album->gphoto_name, $this->showOnlyAlbums) )
+				if ( count($this->showOnlyAlbums) && !in_array((string) $album->albumName, $this->showOnlyAlbums) )
 				{
 					continue;
 				}
-				if ( $this->config['showGooglePlus'] == 0 && in_array((string) $album->gphoto_name, array('ScrapbookPhotos', 'ProfilePhotos')) )
+				if ( $this->config['showGooglePlus'] == 0 && in_array((string) $album->albumName, array('ScrapbookPhotos', 'ProfilePhotos')) )
 				{
 					continue;
 				}
@@ -144,16 +157,34 @@ if ( !class_exists('KPicasaGallery') )
 				$remainingWidth -= $width;
 				print "<td width='$width%'>";
 
-				$name      = (string) $album->gphoto_name;
-				$title     = wp_specialchars( (string) $album->title );
-				$summary   = wp_specialchars( (string) $album->summary );
-				$location  = wp_specialchars( (string) $album->gphoto_location );
-				$published = wp_specialchars( date($this->config['dateFormat'], strtotime( $album->published ))); // that way it keeps the timezone
-				$nbPhotos  = (string) $album->gphoto_numphotos;
+
+				// thumbnail
+
+				$aurl  = 'http://kedapi.ddns.net:2283/api/assets/'.$album->albumThumbnailAssetId.'/thumbnail?size=thumbnail'; // Immich URL
+				$adata = wp_remote_get( 
+					$aurl, array(
+						'headers' => array('x-api-key' => 'IMMICH_API_KEY')  // Immich API key
+					)
+				);
+				// $thumbnail_url = $adata['http_response']->get_response_object()->url;
+				$base64_image = base64_encode($adata['http_response']->get_response_object()->body);
+				$thumbnail_url = "data:image/jpeg;base64, " . $base64_image;
+				$size = getimagesize('data://application/octet-stream;base64,' . $base64_image);
+				$width = $size[0];
+				$height = $size[1];
+				
+				//var_dump($album);
+
+				$name      = (string) $album->id;
+				$title     = wp_specialchars( (string) $album->albumName );
+				$summary   = wp_specialchars( (string) $album->description );
+				// $location  = wp_specialchars( (string) $album->gphoto_location );
+				$published = wp_specialchars( date("d.m.Y", strtotime( $album->startDate ))); // that way it keeps the timezone
+				$nbPhotos  = (string) $album->assetCount;
 				$albumURL  = add_query_arg('album', $name, $url);
-				$thumbURL  = (string) $album->media_group->media_thumbnail['url'];
-				$thumbW    = (string) $album->media_group->media_thumbnail['width'];
-				$thumbH    = (string) $album->media_group->media_thumbnail['height'];
+				$thumbURL  = $thumbnail_url;
+				$thumbW    = $width;
+				$thumbH    = $height;
 
 				if ( $this->config['albumThumbSize'] != null && $this->config['albumThumbSize'] != 160 )
 				{
@@ -163,7 +194,7 @@ if ( !class_exists('KPicasaGallery') )
 				}
 
 				print "<a href='$albumURL'><img src='$thumbURL' height='$thumbH' width='$thumbW' alt='".str_replace("'", "&#39;", $title)."' class='kpg-thumb $class' /></a>";
-				print "<div class='kpg-title'><a href='$albumURL'>$title</a></div>";
+				print "<div class='kpg-title' style='width: 180px;  white-space: nowrap;  overflow: hidden;  text-overflow: ellipsis;'><a href='$albumURL'>$title</a></div>";
 				if ( $this->config['albumSummary'] == true && strlen($summary) )
 				{
 					print "<div class='kpg-summary'>$summary</div>";
@@ -174,12 +205,12 @@ if ( !class_exists('KPicasaGallery') )
 				}
 				if ( $this->config['albumPublished'] == true )
 				{
-					print "<div class='kpg-published'>$published</div>";
+					print "<div class='kpg-published'>$published, <i>".sprintf(__ngettext('%d attēls', '%d attēli', $nbPhotos, 'kpicasa_gallery'), $nbPhotos)."</i></div>";
 				}
-				if ( $this->config['albumNbPhoto'] == 1 )
-				{
-					print '<div class="kpg-nbPhotos">'.sprintf(__ngettext('%d photo', '%d photos', $nbPhotos, 'kpicasa_gallery'), $nbPhotos).'</div>';
-				}
+				// if ( $this->config['albumNbPhoto'] == 1 )
+				// {
+				// 	print '<div class="kpg-nbPhotos">'.sprintf(__ngettext('%d attēls', '%d attēli', $nbPhotos, 'kpicasa_gallery'), $nbPhotos).'</div>';
+				// }
 				print '</td>';
 			}
 
@@ -213,12 +244,24 @@ if ( !class_exists('KPicasaGallery') )
 			$data = wp_cache_get('kPicasaGallery_'.$album, 'kPicasaGallery');
 			if ( false === $data )
 			{
-				$url = 'http://picasaweb.google.com/data/feed/api/user/'.urlencode($this->username).'/album/'.urlencode($album).'?kind=photo';
-				if ( strlen($authKey) > 0 )
-				{
-					$url .= '&authkey='.$authKey;
-				}
-				$data = wp_remote_get( $url, array('kind' => 'photo') );
+
+				$url  = 'http://kedapi.ddns.net:2283/api/albums/'.urlencode($album).'?withoutAssets=false'; // Immich URL
+				$data = wp_remote_get( 
+					$url, array(
+						'headers' => array('x-api-key' => 'IMMICH_API_KEY')  // Immich API key
+					)
+				);
+				$dt = json_decode($data['body']);
+
+				// var_dump($dt);
+
+
+				// $url = 'http://picasaweb.google.com/data/feed/api/user/'.urlencode($this->username).'/album/'.urlencode($album).'?kind=photo';
+				// if ( strlen($authKey) > 0 )
+				// {
+				// 	$url .= '&authkey='.$authKey;
+				// }
+				// $data = wp_remote_get( $url, array('kind' => 'photo') );
 				if ( is_wp_error($data) )
 				{
 					return $data;
@@ -228,11 +271,11 @@ if ( !class_exists('KPicasaGallery') )
 				$data = str_replace('media:', 'media_', $data);
 				wp_cache_set('kPicasaGallery_'.$album, $data, 'kPicasaGallery', $this->cacheTimeout);
 			}
-			$xml = @simplexml_load_string($data);
-			if ( $xml === false )
-			{
-				return new WP_Error( 'kpicasa_gallery-invalid-response', '<strong>'.__('Error', 'kpicasa_gallery').':</strong> '.__('the communication with Picasa Web Albums didn\'t go as expected. Here\'s what Picasa Web Albums said', 'kpicasa_gallery').':<br /><br />'.$data );
-			}
+			// $xml = @simplexml_load_string($data);
+			// if ( $xml === false )
+			// {
+			// 	return new WP_Error( 'kpicasa_gallery-invalid-response', '<strong>'.__('Error', 'kpicasa_gallery').':</strong> '.__('the communication with Picasa Web Albums didn\'t go as expected. Here\'s what Picasa Web Albums said', 'kpicasa_gallery').':<br /><br />'.$data );
+			// }
 
 			//----------------------------------------
 			// Display "back" link
@@ -241,17 +284,18 @@ if ( !class_exists('KPicasaGallery') )
 			{
 				$backURL = remove_query_arg('album');
 				$backURL = remove_query_arg('kpap', $backURL);
-				print "<div id='kpg-backLink'><a href='$backURL'>&laquo; ".__('Back to album list', 'kpicasa_gallery').'</a></div>';
+				print "<div id='kpg-backLink'><a href='$backURL'>&laquo; ".__('Atpakaļ uz albumu sarakstu', 'kpicasa_gallery').'</a></div>';
 			}
 
 			//----------------------------------------
 			// Display album information
 			//----------------------------------------
-			$albumTitle     = wp_specialchars( (string) $xml->title );
-			$albumSummary   = wp_specialchars( (string) $xml->subtitle );
-			$albumLocation  = wp_specialchars( (string) $xml->gphoto_location );
+			$albumTitle     = wp_specialchars( (string) $dt->albumName );
+			$albumSummary   = wp_specialchars( (string) $dt->description );
+			$albumLocation  = wp_specialchars( "" );
+			// $albumLocation  = wp_specialchars( (string) $xml->gphoto_location );
 			//$albumPublished = wp_specialchars( date($this->config['dateFormat'], strtotime( $xml->published ))); // that way it keeps the timezone
-			$albumNbPhotos  = (string) $xml->gphoto_numphotos;
+			$albumNbPhotos  = (string) $dt->assetCount;
 			$albumSlideshow = (string) $xml->link[2]['href'];
 
 			print '<div id="kpg-album-description">';
@@ -270,7 +314,7 @@ if ( !class_exists('KPicasaGallery') )
 			}
 			if ( $this->config['albumNbPhoto'] == 1 )
 			{
-				print '<div id="kpg-nbPhotos">'.sprintf(__ngettext('%d photo', '%d photos', $albumNbPhotos, 'kpicasa_gallery'), $albumNbPhotos).'</div>';
+				print '<div id="kpg-nbPhotos">'.sprintf(__ngettext('%d attēls', '%d attēli', $albumNbPhotos, 'kpicasa_gallery'), $albumNbPhotos).'</div>';
 			}
 			if ( $this->config['albumSlideshow'] == 1 )
 			{
@@ -291,7 +335,7 @@ if ( !class_exists('KPicasaGallery') )
 			else
 			{
 				$start = 0;
-				$stop = count( $xml->entry ) - 1;
+				$stop = count( $dt->assets ) - 1;
 			}
 
 			//----------------------------------------
@@ -299,8 +343,44 @@ if ( !class_exists('KPicasaGallery') )
 			//----------------------------------------
 			print '<table cellpadding="0" cellspacing="0" border="0" width="100%" id="kpg-pictures">';
 			$i = -1; $j = -1;
-			foreach( $xml->entry as $photo )
+
+			if (!function_exists('cmpp')){
+				function cmpp($a, $b) {
+				    return strcmp($a->fileCreatedAt, $b->fileCreatedAt);
+				}
+			}
+
+			$photos = $dt->assets;
+			if(isset($photos))
+				usort($photos, "cmpp");
+
+			foreach( $photos as $photo )
 			{
+
+				// thumbnail
+
+				$turl  = 'http://kedapi.ddns.net:2283/api/assets/'.$photo->id.'/thumbnail?size=thumbnail'; // Immich URL
+				$furl  = 'http://kedapi.ddns.net:2283/api/assets/'.$photo->id.'/thumbnail?size=preview'; // Immich URL
+
+				$fdata = wp_remote_get( $furl, array('headers' => array('x-api-key' => 'IMMICH_API_KEY') ));
+				$tdata = wp_remote_get( $turl, array('headers' => array('x-api-key' => 'IMMICH_API_KEY') ));
+
+				// $adt = json_decode($adata['body']);
+				// var_dump($adata['http_response']->get_response_object()->body);
+
+				$t_base64_image = base64_encode($tdata['http_response']->get_response_object()->body);
+				$f_base64_image = base64_encode($fdata['http_response']->get_response_object()->body);
+				$thumbnail_url = "data:image/jpeg;base64, " . $t_base64_image;
+				$full_url = "data:image/jpeg;base64, " . $f_base64_image;
+				// echo "<img src='".$thumbnail_url."' />";
+				$t_size = getimagesize('data://application/octet-stream;base64,' . $t_base64_image);
+				$t_width = $t_size[0];
+				$t_height = $t_size[1];
+				$f_size = getimagesize('data://application/octet-stream;base64,' . $f_base64_image);
+				$f_width = $f_size[0];
+				$f_height = $f_size[1];
+
+
 				$i++;
 				if ($i < $start || $i > $stop)
 				{
@@ -326,11 +406,11 @@ if ( !class_exists('KPicasaGallery') )
 					$isVideo = (string) $photo->media_group->media_content[1]['medium'] == 'video' ? true : false;
 
 					$summary  = wp_specialchars( (string) $photo->summary );
-					$thumbURL = (string) $photo->media_group->media_thumbnail[1]['url'];
-					$thumbW   = (string) $photo->media_group->media_thumbnail[1]['width'];
-					$thumbH   = (string) $photo->media_group->media_thumbnail[1]['height'];
+					$thumbURL = (string) $thumbnail_url;
+					$thumbW   = (string) $t_width;
+					$thumbH   = (string) $t_height;
 
-					if ( $this->config['photoThumbSize'] != null && $this->config['photoThumbSize'] != 144 )
+					if ( $this->config['photoThumbSize'] != null && $this->config['photoThumbSize'] != 144  && $thumbH != '')
 					{
 						$thumbURL = str_replace('/s144/', '/s'.$this->config['photoThumbSize'].'/', $thumbURL);
 						$thumbH   = floor( ($this->config['photoThumbSize'] / 144) * $thumbH );
@@ -409,7 +489,7 @@ if ( !class_exists('KPicasaGallery') )
 					}
 					else
 					{
-						$fullURL = (string) $photo->media_group->media_thumbnail[1]['url'];
+						$fullURL = (string) $full_url;
 						if ( $this->config['photoSize'] != null )
 						{
 							$fullURL = str_replace('/s144/', '/s'.$this->config['photoSize'].'/', $fullURL);
@@ -439,7 +519,7 @@ if ( !class_exists('KPicasaGallery') )
 							}
 							elseif ( $this->config['picEngine'] == 'fancybox' )
 							{
-								$markup = "class='fancybox-kpicasa_gallery' rel='kpicasa_gallery'";
+								$markup = "data-fslightbox='gallery'";
 							}
 
 							if ( strlen($summary) )
@@ -480,6 +560,9 @@ if ( !class_exists('KPicasaGallery') )
 
 			print '</tr>';
 			print '</table>';
+			echo PHP_EOL;
+			print '<script src="/keda/wp-content/plugins/kpicasa-gallery/fancybox/fslightbox.js"></script>';
+			echo PHP_EOL;
 			print '<br style="clear: both;" />';
 
 			//----------------------------------------
@@ -490,7 +573,8 @@ if ( !class_exists('KPicasaGallery') )
 			{
 				$extraArgs['kpgp'] = intval($_GET['kpgp']);
 			}
-			$this->paginator( $page, 'kpap', $this->config['photoPerPage'], count($xml->entry), $extraArgs );
+			if(isset($dt->assets))
+				$this->paginator( $page, 'kpap', $this->config['photoPerPage'], count($dt->assets), $extraArgs );
 			return true;
 		}
 
@@ -507,7 +591,7 @@ if ( !class_exists('KPicasaGallery') )
 						$url = add_query_arg($key, $value, $url);
 					}
 
-					print '<div id="kpg-paginator">'.__('Page', 'kpicasa_gallery').':&nbsp;&nbsp;';
+					print '<div id="kpg-paginator">'.__('Lapa', 'kpicasa_gallery').':&nbsp;&nbsp;';
 					for($i = 1; $i <= $nbPage; $i++)
 					{
 						$pageURL = add_query_arg($argName, $i, $url);

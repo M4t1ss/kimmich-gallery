@@ -9,7 +9,12 @@ table#kpg-albums td {
 
 /* the album picture thumbnail */
 table#kpg-albums td img.kpg-thumb {
-	border: solid 1px black;
+/*	border: solid 1px black;*/
+	width: 175px;
+	height: 175px;
+	object-fit: cover; 
+	object-position: center; 
+
 }
 
 /* the link with the name of the album */
@@ -32,7 +37,7 @@ table#kpg-albums td div.kpg-published {
 
 /* the number of photos in the album */
 table#kpg-albums td div.kpg-nbPhotos {
-	margin-top: 15px;
+/*	margin-top: 5px;*/
 }
 
 /* PLEASE TAKE CARE WHEN EDITING THE TWO CLASSES BELOW */
@@ -56,10 +61,8 @@ div#kpg-backLink {
 
 /* the box with the album description */
 div#kpg-album-description {
-	padding: 10px;
-	margin-bottom: 30px;
-	background-color: #FFFFE1;
-	border: solid 1px #CECF8E;
+	padding-bottom: 10px;
+	font-size: larger;
 }
 
 /* the album title */
@@ -82,7 +85,7 @@ div#kpg-album-description div#kpg-published {
 
 /* the number of photos in the album */
 div#kpg-album-description div#kpg-nbPhotos {
-	margin-top: 15px;
+/*	margin-top: 5px;*/
 }
 
 
@@ -99,7 +102,11 @@ table#kpg-pictures td div.kpg-summary {
 
 /* the picture thumbnail */
 table#kpg-pictures td img.kpg-thumb {
-	border: solid 1px black;
+/*	border: solid 1px black;*/
+	width: 175px;
+	height: 175px;
+	object-fit: cover; 
+	object-position: center; 
 }
 
 /********************************************
